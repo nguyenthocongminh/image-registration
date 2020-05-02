@@ -37,7 +37,7 @@ for x in os.listdir(root_test_path):
     list_set_test.append([x, set_test[0], set_test[1]])
 tp = tn = fp = fn = 0
 
-print("NORMAL")
+print("== NORMAL TEST ================================================================================================")
 progress_total = len(list_set_test)
 count = 0
 printProgressBar(count, progress_total,
@@ -65,7 +65,16 @@ for set_test in list_set_test:
                      length=50,
                      content="(Pass: " + str(tp) + " fail: " + str(tn) + " || total: " + str(progress_total) + ")")
 
-print("CROSS")
+print("Count test set:", len(list_set_test))
+print("Count test pass:", len(set_test_pass))
+print("\t", set_test_pass)
+print("Count test fail:", len(set_test_fail))
+print("\t", set_test_fail)
+print("Accuracy: ", round(len(set_test_pass) / (len(set_test_pass) + len(set_test_fail)) * 100, 2), "%", sep="")
+print()
+
+
+print("== CROSS TEST =================================================================================================")
 progress_total = 0
 for i in range(len(list_set_test)):
     progress_total += i
@@ -86,10 +95,20 @@ for i in range(len(list_set_test)):
             fp += 1
             cross_test_fail.append([list_set_test[i][0] + "/" + list_set_test[i][1],
                                     list_set_test[j][0] + "/" + list_set_test[j][1]])
+            cv.imwrite("result_cross/" +
+                       list_set_test[i][0] + "_" + list_set_test[i][1] +
+                       "To" +
+                       list_set_test[j][0] + "_" + list_set_test[j][1] +
+                       "-fail.jpg", img)
         else:
             cross_test_pass.append([list_set_test[i][0] + "/" + list_set_test[i][1],
                                     list_set_test[j][0] + "/" + list_set_test[j][1]])
             fn += 1
+            cv.imwrite("result_cross/" +
+                       list_set_test[i][0] + "_" + list_set_test[i][1] +
+                       "To" +
+                       list_set_test[j][0] + "_" + list_set_test[j][1] +
+                       "-pass.jpg", img)
         count += 1
         printProgressBar(count, progress_total,
                          prefix='Progress:',
@@ -102,10 +121,20 @@ for i in range(len(list_set_test)):
             fp += 1
             cross_test_fail.append([list_set_test[i][0] + "/" + list_set_test[i][1],
                                     list_set_test[j][0] + "/" + list_set_test[j][2]])
+            cv.imwrite("result_cross/" +
+                       list_set_test[i][0] + "_" + list_set_test[i][1] +
+                       "To" +
+                       list_set_test[j][0] + "_" + list_set_test[j][2] +
+                       "-fail.jpg", img)
         else:
             cross_test_pass.append([list_set_test[i][0] + "/" + list_set_test[i][1],
                                     list_set_test[j][0] + "/" + list_set_test[j][2]])
             fn += 1
+            cv.imwrite("result_cross/" +
+                       list_set_test[i][0] + "_" + list_set_test[i][1] +
+                       "To" +
+                       list_set_test[j][0] + "_" + list_set_test[j][2] +
+                       "-pass.jpg", img)
         count += 1
         printProgressBar(count, progress_total,
                          prefix='Progress:',
@@ -118,10 +147,20 @@ for i in range(len(list_set_test)):
             fp += 1
             cross_test_fail.append([list_set_test[i][0] + "/" + list_set_test[i][2],
                                     list_set_test[j][0] + "/" + list_set_test[j][1]])
+            cv.imwrite("result_cross/" +
+                       list_set_test[i][0] + "_" + list_set_test[i][2] +
+                       "To" +
+                       list_set_test[j][0] + "_" + list_set_test[j][1] +
+                       "-fail.jpg", img)
         else:
             cross_test_pass.append([list_set_test[i][0] + "/" + list_set_test[i][2],
                                     list_set_test[j][0] + "/" + list_set_test[j][1]])
             fn += 1
+            cv.imwrite("result_cross/" +
+                       list_set_test[i][0] + "_" + list_set_test[i][2] +
+                       "To" +
+                       list_set_test[j][0] + "_" + list_set_test[j][1] +
+                       "-pass.jpg", img)
         count += 1
         printProgressBar(count, progress_total,
                          prefix='Progress:',
@@ -134,10 +173,20 @@ for i in range(len(list_set_test)):
             fp += 1
             cross_test_fail.append([list_set_test[i][0] + "/" + list_set_test[i][2],
                                     list_set_test[j][0] + "/" + list_set_test[j][2]])
+            cv.imwrite("result_cross/" +
+                       list_set_test[i][0] + "_" + list_set_test[i][2] +
+                       "To" +
+                       list_set_test[j][0] + "_" + list_set_test[j][2] +
+                       "-fail.jpg", img)
         else:
             cross_test_pass.append([list_set_test[i][0] + "/" + list_set_test[i][2],
                                     list_set_test[j][0] + "/" + list_set_test[j][2]])
             fn += 1
+            cv.imwrite("result_cross/" +
+                       list_set_test[i][0] + "_" + list_set_test[i][2] +
+                       "To" +
+                       list_set_test[j][0] + "_" + list_set_test[j][2] +
+                       "-pass.jpg", img)
         count += 1
         printProgressBar(count, progress_total,
                          prefix='Progress:',
@@ -145,16 +194,6 @@ for i in range(len(list_set_test)):
                          length=50,
                          content="(Pass: " + str(fn) + " fail: " + str(fp) + " || total: " + str(progress_total) + ")")
 
-print()
-print("== NORMAL TEST ================================================================================================")
-print("Count test set:", len(list_set_test))
-print("Count test pass:", len(set_test_pass))
-print("\t", set_test_pass)
-print("Count test fail:", len(set_test_fail))
-print("\t", set_test_fail)
-print("Accuracy: ", round(len(set_test_pass) / (len(set_test_pass) + len(set_test_fail)) * 100, 2), "%", sep="")
-print()
-print("== CROSS TEST =================================================================================================")
 print("Count test set:", fp + fn)
 print("Count test pass:", fn)
 print("Count test fail:", fp)
