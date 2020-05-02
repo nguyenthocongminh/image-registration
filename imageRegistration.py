@@ -87,7 +87,7 @@ def image_registration(path_to_object_image, path_to_scene_image, retry=True, fi
         area_match = calc_area(x_cords, y_cords)
 
         if retry and (area_match < 1 or area_match > w_s * h_s):
-            return image_registration(path_to_scene_image, path_to_object_image, False)
+            return image_registration(path_to_scene_image, path_to_object_image, retry=False)
 
         matches_mask_t = [m for m in matches_mask]
         for i in range(len(matches_mask)):
@@ -99,7 +99,7 @@ def image_registration(path_to_object_image, path_to_scene_image, retry=True, fi
             decision = True
         else:
             if filter_type == cvSIFT:
-                return image_registration(path_to_object_image, path_to_scene_image, True, cvSURF)
+                return image_registration(path_to_object_image, path_to_scene_image, retry=True, filter_type=cvSURF)
             decision = False
 
         img_scene = cv.polylines(img_scene, [np.int32(scene_corner)], True, 255, 3)
