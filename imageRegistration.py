@@ -29,7 +29,11 @@ def resize_with_aspect_ratio(image, width=None, height=None, inter=cv.INTER_AREA
     return cv.resize(image, dim, interpolation=inter)
 
 
-def image_registration(path_to_object_image, path_to_scene_image, retry=True):
+cvSIFT = 1
+cvSURF = 2
+
+
+def image_registration(path_to_object_image, path_to_scene_image, retry=True, filter_type=cvSIFT):
     img_object = cv.imread(path_to_object_image, cv.IMREAD_GRAYSCALE)
     img_scene = cv.imread(path_to_scene_image, cv.IMREAD_GRAYSCALE)
     if img_object is None or img_scene is None:
@@ -37,11 +41,16 @@ def image_registration(path_to_object_image, path_to_scene_image, retry=True):
         return None
 
     min_hessian = 800
-    sift = cv.xfeatures2d.SIFT_create(min_hessian)
-    (kps1, des1) = sift.detectAndCompute(img_object, None)
-    (kps2, des2) = sift.detectAndCompute(img_scene, None)
+    if filter_type == cvSIFT:
+        sift = cv.xfeatures2d.SIFT_create(min_hessian)
+        (kps1, des1) = sift.detectAndCompute(img_object, None)
+        (kps2, des2) = sift.detectAndCompute(img_scene, None)
+    else:
+        surf = cv.xfeatures2d.SURF_create(min_hessian)
+        (kps1, des1) = surf.detectAndCompute(img_object, None)
+        (kps2, des2) = surf.detectAndCompute(img_scene, None)
 
-    matcher = cv.BFMatcher()
+    matcher = cv.FlannBasedMatcher()
     matches = matcher.knnMatch(des1, des2, k=2)
 
     good_matches = []
@@ -78,18 +87,20 @@ def image_registration(path_to_object_image, path_to_scene_image, retry=True):
         area_match = calc_area(x_cords, y_cords)
 
         if retry and (area_match < 1 or area_match > w_s * h_s):
-            return image_registration(path_to_scene_image, path_to_object_image, retry=False)
+            return image_registration(path_to_scene_image, path_to_object_image, False)
+
+        matches_mask_t = [m for m in matches_mask]
+        for i in range(len(matches_mask)):
+            if matches_mask_t[i]:
+                point = tuple(scene[i])
+                if cv.pointPolygonTest(scene_corner, point, False) < 0:
+                    matches_mask_t[i] = 0
+        if area_match > 1 and matches_mask == matches_mask_t:
+            decision = True
         else:
-            matches_mask_t = [m for m in matches_mask]
-            for i in range(len(matches_mask)):
-                if matches_mask_t[i]:
-                    point = tuple(scene[i])
-                    if cv.pointPolygonTest(scene_corner, point, False) < 0:
-                        matches_mask_t[i] = 0
-            if area_match > 1 and matches_mask == matches_mask_t:
-                decision = True
-            else:
-                decision = False
+            if filter_type == cvSIFT:
+                return image_registration(path_to_object_image, path_to_scene_image, True, cvSURF)
+            decision = False
 
         img_scene = cv.polylines(img_scene, [np.int32(scene_corner)], True, 255, 3)
     else:
