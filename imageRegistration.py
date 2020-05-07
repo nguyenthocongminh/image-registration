@@ -21,9 +21,9 @@ def surf_algorithm(object_image, scene_image):
 
 def sift_algorithm(object_image, scene_image):
     sift = cv.xfeatures2d.SIFT_create(min_hessian)
-    (kps1, des1) = sift.detectAndCompute(object_image, None)
-    (kps2, des2) = sift.detectAndCompute(scene_image, None)
-    return kps1, des1, kps2, des2, object_image, scene_image
+    (k1, d1) = sift.detectAndCompute(object_image, None)
+    (k2, d2) = sift.detectAndCompute(scene_image, None)
+    return k1, d1, k2, d2, object_image, scene_image
 
 
 def calculate(kps1, des1, kps2, des2, img_object, img_scene, turn):
