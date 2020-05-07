@@ -1,55 +1,32 @@
 import cv2 as cv
 import numpy as np
+from extraFunc import *
+
+min_hessian = 800
 
 
-def calc_area(x_cords, y_cords):
-    area = 0
-    for x in range(2):
-        v1, v2, v3 = 0, x + 1, x + 2
-        tr_area = abs(0.5 * (x_cords[v1] * (y_cords[v2] - y_cords[v3]) +
-                             x_cords[v2] * (y_cords[v3] - y_cords[v1]) +
-                             x_cords[v3] * (y_cords[v1] - y_cords[v2])))
-        area += tr_area
-    return area
+def orb_algorithm(object_image, scene_image):
+    orb = cv.ORB_create(min_hessian)
+    (k1, d1) = orb.detectAndCompute(object_image, None)
+    (k2, d2) = orb.detectAndCompute(scene_image, None)
+    return k1, d1, k2, d2, object_image, scene_image
 
 
-def resize_with_aspect_ratio(image, width=None, height=None, inter=cv.INTER_AREA):
-    dim = None
-    (h, w) = image.shape[:2]
-
-    if width is None and height is None:
-        return image
-    if width is None:
-        r = height / float(h)
-        dim = (int(w * r), height)
-    else:
-        r = width / float(w)
-        dim = (width, int(h * r))
-
-    return cv.resize(image, dim, interpolation=inter)
+def surf_algorithm(object_image, scene_image):
+    surf = cv.xfeatures2d.SURF_create(min_hessian)
+    (k1, d1) = surf.detectAndCompute(object_image, None)
+    (k2, d2) = surf.detectAndCompute(scene_image, None)
+    return k1, d1, k2, d2, object_image, scene_image
 
 
-cvSIFT = 1
-cvSURF = 2
+def sift_algorithm(object_image, scene_image):
+    sift = cv.xfeatures2d.SIFT_create(min_hessian)
+    (kps1, des1) = sift.detectAndCompute(object_image, None)
+    (kps2, des2) = sift.detectAndCompute(scene_image, None)
+    return kps1, des1, kps2, des2, object_image, scene_image
 
 
-def image_registration(path_to_object_image, path_to_scene_image, retry=True, filter_type=cvSIFT):
-    img_object = cv.imread(path_to_object_image, cv.IMREAD_GRAYSCALE)
-    img_scene = cv.imread(path_to_scene_image, cv.IMREAD_GRAYSCALE)
-    if img_object is None or img_scene is None:
-        print("Error reading images")
-        return None
-
-    min_hessian = 800
-    if filter_type == cvSIFT:
-        sift = cv.xfeatures2d.SIFT_create(min_hessian)
-        (kps1, des1) = sift.detectAndCompute(img_object, None)
-        (kps2, des2) = sift.detectAndCompute(img_scene, None)
-    else:
-        surf = cv.xfeatures2d.SURF_create(min_hessian)
-        (kps1, des1) = surf.detectAndCompute(img_object, None)
-        (kps2, des2) = surf.detectAndCompute(img_scene, None)
-
+def calculate(kps1, des1, kps2, des2, img_object, img_scene, turn):
     matcher = cv.FlannBasedMatcher()
     matches = matcher.knnMatch(des1, des2, k=2)
 
@@ -86,21 +63,19 @@ def image_registration(path_to_object_image, path_to_scene_image, retry=True, fi
 
         area_match = calc_area(x_cords, y_cords)
 
-        if retry and (area_match < 1 or area_match > w_s * h_s):
-            return image_registration(path_to_scene_image, path_to_object_image, retry=False)
-
-        matches_mask_t = [m for m in matches_mask]
-        for i in range(len(matches_mask)):
-            if matches_mask_t[i]:
-                point = tuple(scene[i])
-                if cv.pointPolygonTest(scene_corner, point, False) < 0:
-                    matches_mask_t[i] = 0
-        if area_match > 1 and matches_mask == matches_mask_t:
-            decision = True
-        else:
-            if filter_type == cvSIFT:
-                return image_registration(path_to_object_image, path_to_scene_image, retry=True, filter_type=cvSURF)
+        if turn < 3 and area_match < 1 or area_match > w_s * h_s:
             decision = False
+        else:
+            matches_mask_t = [m for m in matches_mask]
+            for i in range(len(matches_mask)):
+                if matches_mask_t[i]:
+                    point = tuple(scene[i])
+                    if cv.pointPolygonTest(scene_corner, point, False) < 0:
+                        matches_mask_t[i] = 0
+            if area_match > 1 and matches_mask == matches_mask_t:
+                decision = True
+            else:
+                decision = False
 
         img_scene = cv.polylines(img_scene, [np.int32(scene_corner)], True, 255, 3)
     else:
@@ -114,3 +89,27 @@ def image_registration(path_to_object_image, path_to_scene_image, retry=True, fi
     img3 = resize_with_aspect_ratio(img3, 1800)
 
     return decision, img3
+
+
+def image_registration(path_to_object_image, path_to_scene_image, turn=1):
+    img_object = cv.imread(path_to_object_image, cv.IMREAD_GRAYSCALE)
+    img_scene = cv.imread(path_to_scene_image, cv.IMREAD_GRAYSCALE)
+    if img_object is None or img_scene is None:
+        print("Error reading images")
+        return None
+
+    if turn == 1:
+        kps1, des1, kps2, des2, obj, scene = sift_algorithm(img_object, img_scene)
+    elif turn == 3:
+        kps1, des1, kps2, des2, obj, scene = sift_algorithm(img_scene, img_object)
+    elif turn == 2:
+        kps1, des1, kps2, des2, obj, scene = surf_algorithm(img_object, img_scene)
+    else:
+        kps1, des1, kps2, des2, obj, scene = surf_algorithm(img_scene, img_object)
+
+    decision, img = calculate(kps1, des1, kps2, des2, obj, scene, turn)
+    if not decision and turn < 4:
+        turn += 1
+        return image_registration(path_to_object_image, path_to_scene_image, turn)
+
+    return decision, img
