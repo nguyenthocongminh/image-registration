@@ -3,32 +3,36 @@ import numpy as np
 from extraFunc import *
 
 min_hessian = 800
-
-
-def orb_algorithm(object_image, scene_image):
-    orb = cv.ORB_create(min_hessian)
-    (k1, d1) = orb.detectAndCompute(object_image, None)
-    (k2, d2) = orb.detectAndCompute(scene_image, None)
-    return k1, d1, k2, d2, object_image, scene_image
+retry = [1, 2, 5, 7]
 
 
 def surf_algorithm(object_image, scene_image):
     surf = cv.xfeatures2d.SURF_create(min_hessian)
     (k1, d1) = surf.detectAndCompute(object_image, None)
     (k2, d2) = surf.detectAndCompute(scene_image, None)
-    return k1, d1, k2, d2, object_image, scene_image
+    m = cv.FlannBasedMatcher()
+    return k1, d1, k2, d2, object_image, scene_image, m
 
 
 def sift_algorithm(object_image, scene_image):
     sift = cv.xfeatures2d.SIFT_create(min_hessian)
     (k1, d1) = sift.detectAndCompute(object_image, None)
     (k2, d2) = sift.detectAndCompute(scene_image, None)
-    return k1, d1, k2, d2, object_image, scene_image
+    m = cv.FlannBasedMatcher()
+    return k1, d1, k2, d2, object_image, scene_image, m
 
 
-def calculate(kps1, des1, kps2, des2, img_object, img_scene, turn):
-    matcher = cv.FlannBasedMatcher()
+def brisk_algorithm(object_image, scene_image, scale=1):
+    sift = cv.BRISK_create(5, 3, scale)
+    (k1, d1) = sift.detectAndCompute(object_image, None)
+    (k2, d2) = sift.detectAndCompute(scene_image, None)
+    m = cv.BFMatcher(cv.NORM_HAMMING)
+    return k1, d1, k2, d2, object_image, scene_image, m
+
+
+def calculate(kps1, des1, kps2, des2, img_object, img_scene, matcher, turn):
     matches = matcher.knnMatch(des1, des2, k=2)
+    img2 = img_scene.copy()
 
     good_matches = []
     for m, n in matches:
@@ -63,7 +67,7 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, turn):
 
         area_match = calc_area(x_cords, y_cords)
 
-        if turn < 3 and area_match < 1 or area_match > w_s * h_s:
+        if turn in retry and area_match < 1 or area_match > w_s * h_s:
             decision = False
         else:
             matches_mask_t = [m for m in matches_mask]
@@ -77,7 +81,7 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, turn):
             else:
                 decision = False
 
-        img_scene = cv.polylines(img_scene, [np.int32(scene_corner)], True, 255, 3)
+        cv.polylines(img2, [np.int32(scene_corner)], True, 255, 3)
     else:
         decision = False
 
@@ -85,7 +89,7 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, turn):
                        matchesMask=matches_mask,  # draw only inliers
                        flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
-    img3 = cv.drawMatches(img_object, kps1, img_scene, kps2, good_matches, None, **draw_params)
+    img3 = cv.drawMatches(img_object, kps1, img2, kps2, good_matches, None, **draw_params)
     img3 = resize_with_aspect_ratio(img3, 1800)
 
     return decision, img3
@@ -98,18 +102,27 @@ def image_registration(path_to_object_image, path_to_scene_image, turn=1):
         print("Error reading images")
         return None
 
-    if turn == 1:
-        kps1, des1, kps2, des2, obj, scene = sift_algorithm(img_object, img_scene)
-    elif turn == 3:
-        kps1, des1, kps2, des2, obj, scene = sift_algorithm(img_scene, img_object)
-    elif turn == 2:
-        kps1, des1, kps2, des2, obj, scene = surf_algorithm(img_object, img_scene)
-    else:
-        kps1, des1, kps2, des2, obj, scene = surf_algorithm(img_scene, img_object)
+    decision = False
+    img = None
+    while not decision and turn <= 8:
+        if turn == 1:
+            kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_object, img_scene)
+        elif turn == 3:
+            kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_scene, img_object)
+        elif turn == 2:
+            kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_object, img_scene)
+        elif turn == 4:
+            kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_scene, img_object)
+        elif turn == 5:
+            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene)
+        elif turn == 6:
+            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object)
+        elif turn == 7:
+            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene, 3)
+        else:
+            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object, 3)
 
-    decision, img = calculate(kps1, des1, kps2, des2, obj, scene, turn)
-    if not decision and turn < 4:
+        decision, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
         turn += 1
-        return image_registration(path_to_object_image, path_to_scene_image, turn)
 
     return decision, img
