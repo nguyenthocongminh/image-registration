@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 from extraFunc import *
+import imutils
 
 min_hessian = 800
 retry = [1, 2, 5, 7]
@@ -42,87 +43,185 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, matcher, turn):
     obj = np.float32([kps1[m.queryIdx].pt for m in good_matches])
     scene = np.float32([kps2[m.trainIdx].pt for m in good_matches])
 
-    H, mask = cv.findHomography(obj, scene, cv.RANSAC)
-    matches_mask = mask.ravel().tolist()
+    if len(obj) > 0 and len(scene) > 0:
+        H, mask = cv.findHomography(obj, scene, cv.RANSAC, 5.0)
+        matches_mask = mask.ravel().tolist()
 
-    if H is not None:
-        h_o, w_o = img_object.shape
-        obj_corner = np.float32([[0, 0], [0, h_o - 1], [w_o - 1, h_o - 1], [w_o - 1, 0]]).reshape(-1, 1, 2)
-        scene_corner = cv.perspectiveTransform(obj_corner, H)
+        if H is not None:
+            h_o, w_o = img_object.shape
+            obj_corner = np.float32([[0, 0], [0, h_o - 1], [w_o - 1, h_o - 1], [w_o - 1, 0]]).reshape(-1, 1, 2)
+            scene_corner = cv.perspectiveTransform(obj_corner, H)
 
-        x_cords = []
-        y_cords = []
-        h_s, w_s = img_scene.shape
-        for i in scene_corner:
-            x_cords.append(i[0][0])
-            y_cords.append(i[0][1])
-            if i[0][0] < 0:
-                i[0][0] = 0
-            if i[0][1] < 0:
-                i[0][1] = 0
-            if i[0][0] > w_s:
-                i[0][0] = w_s - 3
-            if i[0][1] > h_s:
-                i[0][1] = h_s - 3
+            x_cords = []
+            y_cords = []
+            h_s, w_s = img_scene.shape
+            for i in scene_corner:
+                x_cords.append(i[0][0])
+                y_cords.append(i[0][1])
+                if i[0][0] < 0:
+                    i[0][0] = 0
+                if i[0][1] < 0:
+                    i[0][1] = 0
+                if i[0][0] > w_s:
+                    i[0][0] = w_s - 3
+                if i[0][1] > h_s:
+                    i[0][1] = h_s - 3
 
-        area_match = calc_area(x_cords, y_cords)
+            area_match = calc_area(x_cords, y_cords)
 
-        if turn in retry and area_match < 1 or area_match > w_s * h_s:
-            decision = False
-        else:
-            matches_mask_t = [m for m in matches_mask]
-            for i in range(len(matches_mask)):
-                if matches_mask_t[i]:
-                    point = tuple(scene[i])
-                    if cv.pointPolygonTest(scene_corner, point, False) < 0:
-                        matches_mask_t[i] = 0
-            if area_match > 1 and matches_mask == matches_mask_t:
-                decision = True
+            if turn in retry and area_match < 1 or area_match > w_s * h_s:
+                predict = False
             else:
-                decision = False
+                matches_mask_t = [m for m in matches_mask]
+                for i in range(len(matches_mask)):
+                    if matches_mask_t[i]:
+                        point = tuple(scene[i])
+                        if cv.pointPolygonTest(scene_corner, point, False) < 0:
+                            matches_mask_t[i] = 0
+                if area_match > 100 and sum(matches_mask_t)/sum(matches_mask) > 0.93:
+                    predict = True
+                else:
+                    predict = False
 
-        cv.polylines(img2, [np.int32(scene_corner)], True, 255, 3)
+            cv.polylines(img2, [np.int32(scene_corner)], True, 255, 3)
+        else:
+            predict = False
+
+        draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
+                           matchesMask=matches_mask,  # draw only inliers
+                           flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+
+        img3 = cv.drawMatches(img_object, kps1, img2, kps2, good_matches, None, **draw_params)
+        img3 = resize_with_aspect_ratio(img3, 1800)
     else:
-        decision = False
+        predict = False
+        img3 = []
 
-    draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
-                       matchesMask=matches_mask,  # draw only inliers
-                       flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-
-    img3 = cv.drawMatches(img_object, kps1, img2, kps2, good_matches, None, **draw_params)
-    img3 = resize_with_aspect_ratio(img3, 1800)
-
-    return decision, img3
+    return predict, img3
 
 
-def image_registration(path_to_object_image, path_to_scene_image, turn=1):
+def remove_time(img):
+    # img = cv.bilateralFilter(img, 11, 17, 17)
+    edged = cv.Canny(img, 30, 200)
+    nts = cv.findContours(edged.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(nts)
+
+    h_img, w_img = img.shape
+
+    screenCnt = []
+    for c in cnts:
+        (x, y, w, h) = cv.boundingRect(c)
+        if w_img/160 <= w <= w_img/25 and 0.35 <= w/h <= 1:
+            screenCnt.append((x, y, w, h))
+
+    valid_y = []
+    for i in screenCnt:
+        if i[1] > 0.8*h_img:
+            valid_y.append(i)
+
+    if len(valid_y) > 0:
+        predict = True
+        p_y = [i[1] for i in valid_y]
+        min_y = max(set(p_y), key=p_y.count)
+
+        valid = []
+        for i in valid_y:
+            if i[1] == min_y:
+                valid.append(i)
+
+        if len(valid) > 1:
+            max_w = valid[0][2]
+            max_h = valid[0][3]
+            min_x = valid[0][0]
+            max_x = valid[0][0]
+            for i in valid:
+                if min_x > i[0]:
+                    min_x = i[0]
+                if max_x < i[0]:
+                    max_x = i[0]
+                if max_w < i[2]:
+                    max_w = i[2]
+                if max_h < i[3]:
+                    max_h = i[3]
+            max_y = min_y + max_h
+            max_x = max_x + max_w
+
+            img = cv.rectangle(img, (min_x, min_y), (max_x, max_y), 0, -1)
+    else:
+        predict = False
+    return predict, img
+
+
+def image_registration(path_to_object_image, path_to_scene_image):
+    name = path_to_object_image.split('/')[1]
     img_object = cv.imread(path_to_object_image, cv.IMREAD_GRAYSCALE)
     img_scene = cv.imread(path_to_scene_image, cv.IMREAD_GRAYSCALE)
-    if img_object is None or img_scene is None:
-        print("Error reading images")
-        return None
 
-    decision = False
+    h_o, w_o = img_object.shape
+    h_s, w_s = img_scene.shape
+
+    if w_o*h_o > w_s*h_s:
+        img_object = resize_with_aspect_ratio(img_object, w_s)
+    if w_s*h_s > w_o*h_o:
+        img_scene = resize_with_aspect_ratio(img_scene, w_o)
+
+    h_o, w_o = img_object.shape
+    h_s, w_s = img_scene.shape
+
+    mirror_object = img_object.copy()
+    mirror_scene = img_scene.copy()
+    mirror_object = resize_with_aspect_ratio(mirror_object, 800)
+    mirror_scene = resize_with_aspect_ratio(mirror_scene, 800)
+
+    if w_o > 1920:
+        img_object = resize_with_aspect_ratio(img_object, 1920)
+    if w_s > 1920:
+        img_scene = resize_with_aspect_ratio(img_scene, 1920)
+
+    img_object_array = [
+        img_object,
+        mirror_object
+    ]
+    img_scene_array = [
+        img_scene,
+        mirror_scene
+    ]
+
+    predict = False
     img = None
-    while not decision and turn <= 8:
-        if turn == 1:
-            kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_object, img_scene)
-        elif turn == 3:
-            kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_scene, img_object)
-        elif turn == 2:
-            kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_object, img_scene)
-        elif turn == 4:
-            kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_scene, img_object)
-        elif turn == 5:
-            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene)
-        elif turn == 6:
-            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object)
-        elif turn == 7:
-            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene, 3)
-        else:
-            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object, 3)
 
-        decision, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
-        turn += 1
+    for i in [0, 1]:
+        object_time, img_object = remove_time(img_object_array[i])
+        scene_time, img_scene = remove_time(img_scene_array[i])
 
-    return decision, img
+        if img_object is None or img_scene is None:
+            print("Error reading images")
+            return None
+
+        turn = 1
+        while not predict and turn <= 8:
+            if turn == 1:
+                kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_object, img_scene)
+            elif turn == 3:
+                kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_scene, img_object)
+            elif turn == 2:
+                kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_object, img_scene)
+            elif turn == 4:
+                kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_scene, img_object)
+            elif turn == 5:
+                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene)
+            elif turn == 6:
+                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object)
+            elif turn == 7:
+                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene, 3)
+            else:
+                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object, 3)
+
+            predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+            turn += 1
+        tmp_img = img.copy()
+        if predict:
+            break
+        img = tmp_img
+
+    return predict, img
