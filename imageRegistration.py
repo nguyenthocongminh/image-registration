@@ -1,10 +1,11 @@
-import cv2 as cv
-import numpy as np
-from extraFunc import *
 import imutils
+import numpy as np
+import gc
+
+from extraFunc import *
 
 min_hessian = 800
-retry = [1, 2, 5, 7]
+retry = [1, 3, 5, 7]
 
 
 def surf_algorithm(object_image, scene_image):
@@ -40,8 +41,13 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, matcher, turn):
         if m.distance < 0.75 * n.distance:
             good_matches.append(m)
 
-    obj = np.float32([kps1[m.queryIdx].pt for m in good_matches])
-    scene = np.float32([kps2[m.trainIdx].pt for m in good_matches])
+    obj = []
+    scene = []
+    for i in range(len(good_matches)):
+        obj.append(kps1[good_matches[i].queryIdx].pt)
+        scene.append(kps2[good_matches[i].trainIdx].pt)
+    obj = np.asarray(obj)
+    scene = np.asarray(scene)
 
     if len(obj) > 0 and len(scene) > 0:
         H, mask = cv.findHomography(obj, scene, cv.RANSAC, 5.0)
@@ -78,7 +84,7 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, matcher, turn):
                         point = tuple(scene[i])
                         if cv.pointPolygonTest(scene_corner, point, False) < 0:
                             matches_mask_t[i] = 0
-                if area_match > 100 and sum(matches_mask_t)/sum(matches_mask) > 0.93:
+                if area_match > 100 and sum(matches_mask_t)/sum(matches_mask) > 0.91:
                     predict = True
                 else:
                     predict = False
@@ -95,7 +101,8 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, matcher, turn):
         img3 = resize_with_aspect_ratio(img3, 1800)
     else:
         predict = False
-        img3 = []
+        img3 = np.hstack((img_object, img_scene))
+        img3 = resize_with_aspect_ratio(img3, 1800)
 
     return predict, img3
 
@@ -153,7 +160,6 @@ def remove_time(img):
 
 
 def image_registration(path_to_object_image, path_to_scene_image):
-    name = path_to_object_image.split('/')[1]
     img_object = cv.imread(path_to_object_image, cv.IMREAD_GRAYSCALE)
     img_scene = cv.imread(path_to_scene_image, cv.IMREAD_GRAYSCALE)
 
@@ -188,11 +194,13 @@ def image_registration(path_to_object_image, path_to_scene_image):
     ]
 
     predict = False
-    img = None
+    img = []
 
     for i in [0, 1]:
-        object_time, img_object = remove_time(img_object_array[i])
-        scene_time, img_scene = remove_time(img_scene_array[i])
+        _obj = img_object_array[i]
+        _sce = img_scene_array[i]
+        # object_time, img_object = remove_time(img_object_array[i])
+        # scene_time, img_scene = remove_time(img_scene_array[i])
 
         if img_object is None or img_scene is None:
             print("Error reading images")
@@ -200,28 +208,33 @@ def image_registration(path_to_object_image, path_to_scene_image):
 
         turn = 1
         while not predict and turn <= 8:
-            if turn == 1:
-                kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_object, img_scene)
-            elif turn == 3:
-                kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_scene, img_object)
-            elif turn == 2:
-                kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_object, img_scene)
-            elif turn == 4:
-                kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_scene, img_object)
-            elif turn == 5:
-                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene)
-            elif turn == 6:
-                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object)
-            elif turn == 7:
-                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene, 3)
-            else:
-                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object, 3)
+            try:
+                if turn == 1:
+                    kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(_obj, _sce)
+                elif turn == 2:
+                    kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(_sce, _obj)
+                elif turn == 3:
+                    kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(_obj, _sce)
+                elif turn == 4:
+                    kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(_sce, _obj)
+                elif turn == 5:
+                    kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(_obj, _sce)
+                elif turn == 6:
+                    kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(_sce, _obj)
+                elif turn == 7:
+                    kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(_obj, _sce, 3)
+                else:
+                    kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(_sce, _obj, 3)
 
-            predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+                predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+            except:
+                predict = False
             turn += 1
+            gc.collect()
         tmp_img = img.copy()
         if predict:
             break
         img = tmp_img
+        gc.collect()
 
     return predict, img
