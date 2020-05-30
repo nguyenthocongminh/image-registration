@@ -199,8 +199,6 @@ def image_registration(path_to_object_image, path_to_scene_image):
     for i in [0, 1]:
         _obj = img_object_array[i]
         _sce = img_scene_array[i]
-        # object_time, img_object = remove_time(img_object_array[i])
-        # scene_time, img_scene = remove_time(img_scene_array[i])
 
         if img_object is None or img_scene is None:
             print("Error reading images")
