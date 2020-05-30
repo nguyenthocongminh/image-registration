@@ -75,7 +75,7 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, matcher, turn):
 
             area_match = calc_area(x_cords, y_cords)
 
-            if turn in retry and area_match < 1 or area_match > w_s * h_s:
+            if turn == 1 and area_match < 1 or area_match > w_s * h_s:
                 predict = False
             else:
                 matches_mask_t = [m for m in matches_mask]
@@ -101,8 +101,7 @@ def calculate(kps1, des1, kps2, des2, img_object, img_scene, matcher, turn):
         img3 = resize_with_aspect_ratio(img3, 1800)
     else:
         predict = False
-        img3 = np.hstack((img_object, img_scene))
-        img3 = resize_with_aspect_ratio(img3, 1800)
+        img3 = None
 
     return predict, img3
 
@@ -159,80 +158,74 @@ def remove_time(img):
     return predict, img
 
 
-def image_registration(path_to_object_image, path_to_scene_image):
+def image_registration(path_to_object_image, path_to_scene_image, algorithm=1):
     img_object = cv.imread(path_to_object_image, cv.IMREAD_GRAYSCALE)
     img_scene = cv.imread(path_to_scene_image, cv.IMREAD_GRAYSCALE)
 
     h_o, w_o = img_object.shape
     h_s, w_s = img_scene.shape
 
-    if w_o*h_o > w_s*h_s:
-        img_object = resize_with_aspect_ratio(img_object, w_s)
-    if w_s*h_s > w_o*h_o:
-        img_scene = resize_with_aspect_ratio(img_scene, w_o)
+    if algorithm == 3 or algorithm == 4:
+        if w_o > 1920:
+            img_object = resize_with_aspect_ratio(img_object, 1920)
+        if w_s > 1920:
+            img_scene = resize_with_aspect_ratio(img_scene, 1920)
+        h_o, w_o = img_object.shape
+        h_s, w_s = img_scene.shape
 
-    h_o, w_o = img_object.shape
-    h_s, w_s = img_scene.shape
-
-    mirror_object = img_object.copy()
-    mirror_scene = img_scene.copy()
-    mirror_object = resize_with_aspect_ratio(mirror_object, 800)
-    mirror_scene = resize_with_aspect_ratio(mirror_scene, 800)
-
-    if w_o > 1920:
-        img_object = resize_with_aspect_ratio(img_object, 1920)
-    if w_s > 1920:
-        img_scene = resize_with_aspect_ratio(img_scene, 1920)
-
-    img_object_array = [
-        img_object,
-        mirror_object
-    ]
-    img_scene_array = [
-        img_scene,
-        mirror_scene
-    ]
-
+    turn = 1
     predict = False
-    img = []
+    img = None
 
-    for i in [0, 1]:
-        _obj = img_object_array[i]
-        _sce = img_scene_array[i]
-
-        if img_object is None or img_scene is None:
-            print("Error reading images")
-            return None
-
-        turn = 1
-        while not predict and turn <= 8:
-            try:
-                if turn == 1:
-                    kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(_obj, _sce)
-                elif turn == 2:
-                    kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(_sce, _obj)
-                elif turn == 3:
-                    kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(_obj, _sce)
-                elif turn == 4:
-                    kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(_sce, _obj)
-                elif turn == 5:
-                    kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(_obj, _sce)
-                elif turn == 6:
-                    kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(_sce, _obj)
-                elif turn == 7:
-                    kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(_obj, _sce, 3)
-                else:
-                    kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(_sce, _obj, 3)
-
+    try:
+        if algorithm == 1 or algorithm == "sift":
+            kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_object, img_scene)
+            predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+            gc.collect()
+            if not predict:
+                kps1, des1, kps2, des2, obj, scene, matcher = sift_algorithm(img_scene, img_object)
                 predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
-            except:
-                predict = False
+                gc.collect()
+
+        if algorithm == 2 or algorithm == "surf":
+            kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_object, img_scene)
+            predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
             turn += 1
             gc.collect()
-        tmp_img = img.copy()
-        if predict:
-            break
-        img = tmp_img
-        gc.collect()
+            if not predict:
+                kps1, des1, kps2, des2, obj, scene, matcher = surf_algorithm(img_scene, img_object)
+                predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+                gc.collect()
 
+        if algorithm == 3 or algorithm == "brisk":
+            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene)
+            predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+            turn += 1
+            gc.collect()
+            if not predict:
+                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object)
+                predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+                gc.collect()
+
+        if algorithm == 4 or algorithm == "brisk_improve":
+            kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_object, img_scene, 3)
+            predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+            turn += 1
+            gc.collect()
+            if not predict:
+                kps1, des1, kps2, des2, obj, scene, matcher = brisk_algorithm(img_scene, img_object, 3)
+                predict, img = calculate(kps1, des1, kps2, des2, obj, scene, matcher, turn)
+                gc.collect()
+    except (ValueError, Exception):
+        predict = False
+
+    if img is None:
+        if h_s < h_o:
+            img_scene = np.vstack((img_scene, np.zeros((h_o-h_s, w_s))))
+        if h_o < h_s:
+            img_object = np.vstack((img_object, np.zeros((h_s-h_o, w_o))))
+        img = np.hstack((img_object, img_scene))
+        img = resize_with_aspect_ratio(img, 1800)
+
+    gc.collect()
     return predict, img
