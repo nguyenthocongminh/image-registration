@@ -42,13 +42,16 @@ def printResult(set_test, set_pass, set_fail):
     print("Accuracy: ", round(len(set_pass) / (len(set_pass) + len(set_fail)) * 100, 2), "%", sep="")
 
 
-def writeResultImg(is_pass, name, root, image):
+def writeResultImg(is_pass, name, root, image, algorithm, time):
     if not os.path.isdir(root):
         os.makedirs(root, exist_ok=True)
+    f = open(root+"/"+root+".txt", "a")
     if is_pass:
         text = "pass"
     else:
         text = "fail"
+    space = "\t"
+    f.write(name + space + text + space + algorithm + space + str(time) + "\n")
     cv.imwrite(root + "/" + text + "-" + name + ".jpg", image)
 
 
@@ -78,16 +81,17 @@ printProgressBar(count, progress_total,
                  length=50,
                  content="(Pass: " + str(tp) + " fail: " + str(tn) + " || total: " + str(progress_total) + ")")
 for set_test in list_set_test:
+    start = datetime.now()
     predict, img = ir(root_test_path + set_test[0] + "/" + set_test[1],
                       root_test_path + set_test[0] + "/" + set_test[2])
+    end = datetime.now()
     if predict:
         tp += 1
         set_test_pass.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
     else:
         tn += 1
         set_test_fail.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
+    writeResultImg(predict, set_test[0], folder_name, img, "SIFT", end-start)
     count += 1
     printProgressBar(count, progress_total,
                      prefix='Progress:',
@@ -110,17 +114,18 @@ printProgressBar(count, progress_total,
                  length=50,
                  content="(Pass: " + str(tp) + " fail: " + str(tn) + " || total: " + str(progress_total) + ")")
 for set_test in list_set_test:
+    start = datetime.now()
     predict, img = ir(root_test_path + set_test[0] + "/" + set_test[1],
                       root_test_path + set_test[0] + "/" + set_test[2],
-                      2)
+                      algorithm=2)
+    end = datetime.now()
     if predict:
         tp += 1
         set_test_pass.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
     else:
         tn += 1
         set_test_fail.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
+    writeResultImg(predict, set_test[0], folder_name, img, "SURF", end-start)
     count += 1
     printProgressBar(count, progress_total,
                      prefix='Progress:',
@@ -143,17 +148,18 @@ printProgressBar(count, progress_total,
                  length=50,
                  content="(Pass: " + str(tp) + " fail: " + str(tn) + " || total: " + str(progress_total) + ")")
 for set_test in list_set_test:
+    start = datetime.now()
     predict, img = ir(root_test_path + set_test[0] + "/" + set_test[1],
                       root_test_path + set_test[0] + "/" + set_test[2],
-                      3)
+                      algorithm=3)
+    end = datetime.now()
     if predict:
         tp += 1
         set_test_pass.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
     else:
         tn += 1
         set_test_fail.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
+    writeResultImg(predict, set_test[0], folder_name, img, "BRISK", end-start)
     count += 1
     printProgressBar(count, progress_total,
                      prefix='Progress:',
@@ -176,17 +182,18 @@ printProgressBar(count, progress_total,
                  length=50,
                  content="(Pass: " + str(tp) + " fail: " + str(tn) + " || total: " + str(progress_total) + ")")
 for set_test in list_set_test:
+    start = datetime.now()
     predict, img = ir(root_test_path + set_test[0] + "/" + set_test[1],
                       root_test_path + set_test[0] + "/" + set_test[2],
-                      4)
+                      algorithm=4)
+    end = datetime.now()
     if predict:
         tp += 1
         set_test_pass.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
     else:
         tn += 1
         set_test_fail.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
+    writeResultImg(predict, set_test[0], folder_name, img, "BRISK_improve", end-start)
     count += 1
     printProgressBar(count, progress_total,
                      prefix='Progress:',
@@ -209,33 +216,34 @@ printProgressBar(count, progress_total,
                  length=50,
                  content="(Pass: " + str(tp) + " fail: " + str(tn) + " || total: " + str(progress_total) + ")")
 for set_test in list_set_test:
+    start = datetime.now()
     predict, img = ir(root_test_path + set_test[0] + "/" + set_test[1],
                       root_test_path + set_test[0] + "/" + set_test[2],
-                      1)
+                      algorithm=1)
     gc.collect()
     if not predict:
         predict, img = ir(root_test_path + set_test[0] + "/" + set_test[1],
                           root_test_path + set_test[0] + "/" + set_test[2],
-                          2)
+                          algorithm=2)
     gc.collect()
     if not predict:
         predict, img = ir(root_test_path + set_test[0] + "/" + set_test[1],
                           root_test_path + set_test[0] + "/" + set_test[2],
-                          3)
+                          algorithm=3)
     gc.collect()
     if not predict:
         predict, img = ir(root_test_path + set_test[0] + "/" + set_test[1],
                           root_test_path + set_test[0] + "/" + set_test[2],
-                          4)
+                          algorithm=4)
     gc.collect()
+    end = datetime.now()
     if predict:
         tp += 1
         set_test_pass.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
     else:
         tn += 1
         set_test_fail.append(set_test[0])
-        writeResultImg(predict, set_test[0], folder_name, img)
+    writeResultImg(predict, set_test[0], folder_name, img, "all", end - start)
     count += 1
     printProgressBar(count, progress_total,
                      prefix='Progress:',
