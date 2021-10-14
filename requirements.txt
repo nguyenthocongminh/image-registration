@@ -1,5 +1,5 @@
 imutils
 matplotlib
 numpy
-opencv-python==3.4.2.16
+opencv-python==4.2.0.32
 opencv-contrib-python==4.2.0.32
